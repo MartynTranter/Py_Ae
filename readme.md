@@ -101,4 +101,4 @@ This project is licensed under the MIT License - see the `LICENSE.md` file for d
 ## Contact
 
 - Twitter - [@martyntranter](https://twitter.com/martyntranter)
-- Project Link: [https://github.com/yourrepository/AfterEffectsPipeline](https://github.com/yourrepository/AfterEffectsPipeline)
+- Project Link: [[https://github.com/yourrepository/AfterEffectsPipeline](https://github.com/MartynTranter/Py_Ae)](https://github.com/yourrepository/AfterEffectsPipeline)
