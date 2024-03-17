@@ -818,17 +818,22 @@ class AfterEffectsPipeline(QWidget):
         Populate the table with the last opened projects, combining "Open Project" and "Delete Project"
         buttons under a single "Actions" category.
         """
-        self.last_projects_table.setColumnCount(5)
-        self.last_projects_table.setHorizontalHeaderLabels(['Project Name', 'File Path', 'Last Modified', 'Created By', 'Actions'])
-        self.last_projects_table.setRowCount(len(self.last_project_files))
+        self.last_projects_table.setRowCount(0)  # Reset the table contents
+
+        # Filter out projects that no longer exist on the filesystem
+        existing_projects = [project for project in self.last_project_files if Path(project["path"]).exists()]
+
+        # Update the last project files list to only include existing projects
+        self.last_project_files = existing_projects
 
         for index, project_info in enumerate(self.last_project_files):
-            project_path = project_info["path"]
-            created_by = project_info["created_by"]
+            project_path = Path(project_info["path"])
             project_name = project_path.name
             file_path = str(project_path)
-            last_modified = datetime.fromtimestamp(project_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S') if project_path.exists() else 'File does not exist'
+            last_modified = datetime.fromtimestamp(project_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            created_by = project_info["created_by"]  # Assuming each project_info dict has a "created_by" key
 
+            self.last_projects_table.insertRow(index)
             self.last_projects_table.setItem(index, 0, QTableWidgetItem(project_name))
             self.last_projects_table.setItem(index, 1, QTableWidgetItem(file_path))
             self.last_projects_table.setItem(index, 2, QTableWidgetItem(last_modified))
@@ -841,6 +846,7 @@ class AfterEffectsPipeline(QWidget):
             open_button = QPushButton('Open')
             delete_button = QPushButton('Delete')
 
+            # Connect the buttons to their respective slot functions
             open_button.clicked.connect(lambda _, idx=index: self.open_project_connection(self.last_project_files[idx]["path"].as_posix()))
             delete_button.clicked.connect(lambda _, idx=index: self.delete_project(idx))
 
@@ -848,6 +854,9 @@ class AfterEffectsPipeline(QWidget):
             actions_layout.addWidget(delete_button)
 
             self.last_projects_table.setCellWidget(index, 4, actions_widget)
+
+        # Optionally, save the updated list of projects to persist the changes
+        self.save_settings()
 
     @staticmethod
     def thread_finished():
@@ -879,8 +888,7 @@ class AfterEffectsPipeline(QWidget):
             self.last_project_files = [
                 {"path": Path(project["path"]), "created_by": project.get("created_by", "Unknown")}
                 for project in json.loads(settings.value("last_project_files", "[]"))
-                if isinstance(project, dict)
-            ]
+                if isinstance(project, dict)]
         except json.JSONDecodeError:
             self.last_project_files = []
 
