@@ -10,14 +10,14 @@ PyAE - After Effects Pipeline is a robust desktop application designed to optimi
 
 PyAE comes packed with features aimed at simplifying the After Effects workflow:
 
-- [x] **Open After Effects Projects**: Directly open projects within After Effects with a simple click.
-- [x] **Create New Projects**: Quickly start new projects using customizable templates.
-- [x] **Import Files**: Import various media files directly into your active After Effects project.
-- [x] **Run After Effects**: Launch After Effects directly from the application for a seamless workflow.
-- [ ] **Version Control**: *Upcoming* - Manage different versions of your After Effects projects efficiently.
-- [ ] **Batch Importer**: *Planned* - Import multiple files simultaneously with batch processing capabilities.
-- [ ] **Send Project to Premiere**: *In Development* - Easily transfer projects between After Effects and Premiere Pro for an integrated workflow.
-- [ ] **Light and Dark Mode**: *Future Feature* - Customize the application's appearance with light and dark themes.
+- [x] **Open After Effects Projects**
+- [x] **Create New Projects**
+- [x] **Import Files**
+- [x] **Run After Effects**
+- [ ] **Version Control**
+- [ ] **Batch Importer**
+- [ ] **Send Project to Premiere**
+- [ ] **Light and Dark Mode**
 
 ## Getting Started
 
