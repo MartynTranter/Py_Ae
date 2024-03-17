@@ -1,3 +1,5 @@
+![PyAE Logo](images/logo_banner.png)
+
 # PyAE - After Effects Pipeline
 
 ## Overview
