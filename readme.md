@@ -36,15 +36,10 @@ Follow these steps to install PyAE - After Effects Pipeline:
 
 1. **Clone the repository**:
     ```bash
-    git clone https://yourrepository/AfterEffectsPipeline.git
+    git clone https://github.com/MartynTranter/Py_Ae.git
     ```
     
-2. **Navigate to the project directory**:
-    ```bash
-    cd AfterEffectsPipeline
-    ```
-    
-3. **Install the required dependencies**:
+2. **Install the required dependencies**:
     ```bash
     pip install PyQt5 psutil pygetwindow pywin32
     ```
