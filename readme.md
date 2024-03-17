@@ -1,4 +1,4 @@
-![PyAE Logo](images/logo_banner.png)
+![PyAE Logo](images/Logo_Banner.png)
 
 # PyAE - After Effects Pipeline
 
