@@ -4,7 +4,7 @@
 
 ## Overview
 
-PyAE - After Effects Pipeline is a robust desktop application designed to optimize the workflow of Adobe After Effects users. Utilizing the powerful PyQt5 framework, this application introduces an intuitive approach to project and asset management. Its aim is to streamline the creative process for video editors and motion graphics artists, ensuring an organized, efficient workflow. (Thisis one of my first major projects in Python so this is heavily under development still)
+PyAE - After Effects Pipeline is a robust desktop application designed to optimize the workflow of Adobe After Effects users. Utilizing the powerful PyQt5 framework, this application introduces an intuitive approach to project and asset management. Its aim is to streamline the creative process for video editors and motion graphics artists, ensuring an organized, efficient workflow. (This is one of my first major projects in Python so this is heavily under development still)
 
 ## Features
 
