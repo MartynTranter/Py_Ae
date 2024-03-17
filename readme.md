@@ -48,7 +48,7 @@ Follow these steps to install PyAE - After Effects Pipeline:
 
 Launch PyAE - After Effects Pipeline using the command:
 ```bash
-python after_effects_pipeline.py
+python py_ae_v3.py
 ```
 
 ## Usage
