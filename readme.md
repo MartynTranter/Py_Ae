@@ -55,6 +55,7 @@ python py_ae.py
 ### Configuration
 
 Upon first launch, navigate to the settings via the "Settings" button to configure the necessary paths for:
+![PyAE Logo](images/py_ae_settings.png)
 
 - After Effects executable
 - Assets folder
