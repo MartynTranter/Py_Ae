@@ -9,7 +9,6 @@
 
     `2024-03-17` - Init
 """
-
 import getpass
 import os
 import shutil
@@ -71,7 +70,6 @@ class SettingsDialog(QDialog):
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.layout.addRow(self.buttons)
 
-        # Connect signals and slots for dialog interactions
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         self.aePathBrowseButton.clicked.connect(self.browseForAePath)
@@ -225,9 +223,9 @@ class AfterEffectsPipeline(QWidget):
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
     def create_search_bar(self):
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search Projects")
-        self.search_bar.textChanged.connect(self.filter_projects)
+        self.proj_search_bar = QLineEdit()
+        self.proj_search_bar.setPlaceholderText("Search Projects")
+        self.proj_search_bar.textChanged.connect(self.filter_projects)
 
     def create_asset_search_bar(self):
         self.asset_search_bar = QLineEdit()
@@ -249,25 +247,25 @@ class AfterEffectsPipeline(QWidget):
 
         self.open_project_button = QPushButton()
         self.open_project_button.setText("Open Project")
-        self.open_project_button.setIcon(QIcon("images/book-open.svg"))  # Set the color here
-        self.open_project_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
+        self.open_project_button.setIcon(QIcon("images/book-open.svg"))
+        self.open_project_button.setIconSize(QSize(20, 20))
         self.open_project_button.setFixedSize(80, 80)
 
         self.new_project_button = QPushButton()
         self.new_project_button.setText("New Project")
-        self.new_project_button.setIcon(QIcon("images/file-plus.svg"))  # Set the color here
-        self.new_project_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
+        self.new_project_button.setIcon(QIcon("images/file-plus.svg"))
+        self.new_project_button.setIconSize(QSize(20, 20))
         self.new_project_button.setFixedSize(80, 80)
 
         self.import_file_button = QPushButton()
         self.import_file_button.setText("Import Asset")
         self.import_file_button.setIcon(QIcon("images/file-plus.svg"))
-        self.import_file_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
+        self.import_file_button.setIconSize(QSize(20, 20))
         self.import_file_button.setFixedSize(80, 80)
 
         self.settings_button = QPushButton()
         self.settings_button.setText("Settings")
-        self.settings_button.setIcon(QIcon('images/settings.svg'))  # Ensure you have an appropriate icon
+        self.settings_button.setIcon(QIcon('images/settings.svg'))
         self.settings_button.setIconSize(QSize(20, 20))
         self.settings_button.setFixedSize(200, 40)
 
@@ -276,18 +274,16 @@ class AfterEffectsPipeline(QWidget):
         self.new_project_button.setFixedSize(200, 40)
         self.import_file_button.setFixedSize(200, 40)
 
-        # Create a table widget to display last project files
         self.projects_table = QTableWidget()
-        self.projects_table.setColumnCount(5)  # Increase column count for buttons
+        self.projects_table.setColumnCount(5)
         self.projects_table.setHorizontalHeaderLabels(
             ['Project Name', 'File Path', 'Last Modified', 'Created By', 'Actions'])
         self.projects_table.horizontalHeader().setStretchLastSection(True)
         self.projects_table.setSortingEnabled(True)
         self.projects_table.setSelectionBehavior(QTableWidget.SelectRows)
 
-        # Create a table widget to display imported assets
         self.imported_assets_table = QTableWidget()
-        self.imported_assets_table.setColumnCount(5)  # Adjusted from 4 to 5
+        self.imported_assets_table.setColumnCount(5)
         self.imported_assets_table.setHorizontalHeaderLabels(
             ['Asset Name', 'File Path', 'Last Modified', 'Imported By', 'Actions'])
         self.imported_assets_table.horizontalHeader().setStretchLastSection(True)
@@ -309,24 +305,21 @@ class AfterEffectsPipeline(QWidget):
         button_layout.addWidget(self.settings_button)
         button_layout.addStretch()
 
-        # Arrange the last projects table and imported assets table in separate layouts
         projects_layout = QVBoxLayout()
 
         # Add a label above the last projects table
         saved_projects_label = QLabel("Saved Projects")
-        saved_projects_label.setAlignment(Qt.AlignLeft)  # Align the text to the left
+        saved_projects_label.setAlignment(Qt.AlignLeft)
         projects_layout.addWidget(saved_projects_label)
-        projects_layout.addWidget(self.search_bar)
+        projects_layout.addWidget(self.proj_search_bar)
         projects_layout.addWidget(self.projects_table)
 
-        # Add a label above the imported assets table
         imported_assets_label = QLabel("Imported Assets")
-        imported_assets_label.setAlignment(Qt.AlignLeft)  # Align the text to the left
+        imported_assets_label.setAlignment(Qt.AlignLeft)
         projects_layout.addWidget(imported_assets_label)
         projects_layout.addWidget(self.asset_search_bar)
         projects_layout.addWidget(self.imported_assets_table)
 
-        # Create the main layout by combining the button layout and table layout
         main_layout = QVBoxLayout(self)
         main_layout.addLayout(button_layout)
         main_layout.addLayout(projects_layout)
@@ -437,7 +430,16 @@ class AfterEffectsPipeline(QWidget):
         Args:
             sub_string (str): Search query entered by the user.
         """
-        print(f'need to rewrite - substring: {sub_string}')
+        search_text = self.proj_search_bar.text().lower()
+        for row in range(self.projects_table.rowCount()):
+            item = self.projects_table.item(row, 0)  # Get the item in the first column (Asset Name)
+            if item is not None:
+                asset_name = item.text().lower()
+                # Check if the search text is present in the asset name
+                if search_text in asset_name:
+                    self.projects_table.setRowHidden(row, False)
+                else:
+                    self.projects_table.setRowHidden(row, True)
 
     def filter_assets(self):
         """
@@ -452,7 +454,7 @@ class AfterEffectsPipeline(QWidget):
         """
         search_text = self.asset_search_bar.text().lower()
         for row in range(self.imported_assets_table.rowCount()):
-            item = self.imported_assets_table.item(row, 0)  # Get the item in the first column (Asset Name)
+            item = self.imported_assets_table.item(row, 0)
             if item is not None:
                 asset_name = item.text().lower()
                 # Check if the search text is present in the asset name
@@ -480,7 +482,6 @@ class AfterEffectsPipeline(QWidget):
             aerender_path = Path("C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe")
             command = [aerender_path.as_posix(), project_path]
 
-            # Execute the After Effects command asynchronously
             self.run_after_effects_command_async(command)
         else:
             selected_row = self.projects_table.currentRow()
@@ -506,7 +507,6 @@ class AfterEffectsPipeline(QWidget):
         Args:
             index (int): The index of row and the related project.
         """
-        # Confirm deletion with the user
         confirmation = QMessageBox.question(
             self, "Confirmation", "Are you sure you want to delete this project?",
             QMessageBox.Yes | QMessageBox.Cancel)
@@ -514,7 +514,6 @@ class AfterEffectsPipeline(QWidget):
         if confirmation != QMessageBox.Yes:
             return
 
-        # # Attempt to delete the project file
         project_path = Path(self.projects_table.item(index, 1).text())
         if not project_path.exists():
             QMessageBox.information(self, "File Not Found!")
@@ -537,7 +536,6 @@ class AfterEffectsPipeline(QWidget):
                 template_project_path = Path(Path(__file__).parent, 'Blank_Project.aep')
                 shutil.copyfile(template_project_path, new_project_path.as_posix())
 
-                # Fetch the current operating system's username
                 created_by = getpass.getuser()  # Use the OS username as the project creator's name
 
                 data = self._create_blank_project_data()
@@ -558,11 +556,11 @@ class AfterEffectsPipeline(QWidget):
         """
 
         settings = QSettings("YourOrganization", "AfterEffectsPipeline")
-        aePath = settings.value("aePath", "default/path/to/AfterEffects.exe")  # Fallback default
+        aePath = settings.value("aePath", "default/path/to/AfterEffects.exe")
         if not os.path.exists(aePath):
             self.show_error_message("After Effects path not provided", "Executable not found.")
             return
-        # Run After Effects with the specified command
+
         aerender_path = r"C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe"
         if aerender_path:
             command = [aerender_path]
@@ -591,9 +589,8 @@ class AfterEffectsPipeline(QWidget):
         project_path, _ = QFileDialog.getOpenFileName(self, "Open After Effects Project", initial_dir,
                                                       "After Effects Project Files (*.aep);;All Files (*)")
         if project_path:
-            print(f"Project selected: {project_path}")  # Diagnostic print
+            print(f"Project selected: {project_path}")
             self.last_project_directory = Path(project_path).parent
-            # Use QProcess to start After Effects with the selected project
             self.process = QProcess(self)
             self.process.setProgram(aerender_path)
             self.process.setArguments([project_path])
@@ -641,15 +638,12 @@ class AfterEffectsPipeline(QWidget):
         if not file_path.exists():
             return
 
-        # Copy the file to the assets folder and prepare for import
         destination = Path(self.assets_folder_path, file_path.name)
         shutil.copy(file_path.as_posix(), destination.as_posix())
 
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Generate and execute JSX script for importing
         self.execute_jsx_script(self.after_effects_path.as_posix(), destination.as_posix())
-        # Update UI and settings
         self.update_imported_assets(file_path, current_time, getpass.getuser())
 
     @property
@@ -707,17 +701,14 @@ class AfterEffectsPipeline(QWidget):
         self.imported_assets_table.setItem(row_count, 2, QTableWidgetItem(last_modified))
         self.imported_assets_table.setItem(row_count, 3, QTableWidgetItem(imported_by))
 
-        # Create a container widget to hold both action buttons
         actions_widget = QWidget()
         actions_layout = QHBoxLayout()
         actions_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Add "Import to Current Project" button
         import_button = QPushButton("Import")
         import_button.clicked.connect(lambda _, path=file_path: self.import_to_current_project(path))
         actions_layout.addWidget(import_button)
 
-        # Add "Delete" button
         delete_button = QPushButton("Delete")
         delete_button.clicked.connect(lambda _, row=row_count: self.delete_imported_asset(row))
         actions_layout.addWidget(delete_button)
@@ -812,6 +803,21 @@ class AfterEffectsPipeline(QWidget):
             self.projects_table.removeRow(index)
 
     def add_project_row(self, row_data: dict):
+        """
+        Adds a new row to the projects_table with data from `row_data` and a custom action widget.
+
+        Populates a new table row with values from `row_data`, matching keys to columns. The 'File Path'
+        key is used to create a custom action widget, placed in a hardcoded column (e.g., the 5th column).
+
+        Args:
+            row_data (dict): Data for the new row. Keys should match table columns, and must include
+                            'File Path' for the action widget.
+
+        Note:
+            The values are inserted in the order of `row_data`'s keys. The column for the action widget is
+            hardcoded and should be reviewed if table layout changes. The presence of 'File Path' is
+            critical for action widget creation.
+        """
         new_row_index = self.projects_table.rowCount()
         self.projects_table.insertRow(new_row_index)
         for i, v in enumerate(row_data.values()):
@@ -820,6 +826,21 @@ class AfterEffectsPipeline(QWidget):
         self.projects_table.setCellWidget(new_row_index, 4, action_widget)  # Hard coded column value
 
     def add_asset_row(self, row_data: dict):
+        """
+        Inserts a new row with data from `row_data` into imported_assets_table and adds a custom action widget.
+
+        This method populates a new row in imported_assets_table using the key-value pairs from `row_data`,
+        with each key corresponding to a column header. It also places a custom action widget in a specific
+        column of the newly added row.
+
+        Args:
+            row_data (dict): Dictionary with keys as column headers and values as row data. Keys must align
+                             with the columns of imported_assets_table.
+
+        Note:
+            The insertion order in the table follows the order of keys in `row_data`. The column for the custom
+            action widget is hardcoded (e.g., 5th column), necessitating adjustments for different table layouts.
+        """
         new_row_index = self.imported_assets_table.rowCount()
         self.imported_assets_table.insertRow(new_row_index)
         for i, v in enumerate(row_data.values()):
@@ -839,6 +860,22 @@ class AfterEffectsPipeline(QWidget):
         self.thread.start()
 
     def _collect_table_data(self, table: QTableWidget) -> list[dict]:
+        """
+        Extracts data from a QTableWidget, organizing it as a list of dictionaries.
+
+        Iterates over the table's rows, creating a dictionary for each. Dictionary keys are column headers,
+        and values are cell contents. Empty cells or failed data retrievals result in empty values for the
+        corresponding keys.
+
+        Args:
+            table (QTableWidget): The table from which data is extracted.
+
+        Returns:
+            A list of dictionaries, each representing a row's data. Keys match the table's column headers.
+
+        Note:
+            Handles AttributeError for cells with no data, avoiding interruptions in data collection.
+        """
         table_data = []
         for row in range(table.rowCount()):
             cur_proj_data = self._create_blank_project_data()
@@ -853,6 +890,23 @@ class AfterEffectsPipeline(QWidget):
         return table_data
 
     def _collect_asset_table_data(self, table: QTableWidget) -> list[dict]:
+        """
+        Collects data from a given QTableWidget and returns it as a list of dictionaries.
+
+        Iterates through each row of the table, creating a dictionary for each row with keys
+        corresponding to the column headers and values corresponding to the cell content.
+        If a cell is empty or data cannot be retrieved, the key will still be present with an empty value.
+
+        Args:
+           table (QTableWidget): The table widget from which data is to be collected.
+
+        Returns:
+           list[dict]: A list of dictionaries, where each dictionary represents one row in the table.
+                       The keys are the column headers and the values are the cell contents.
+
+        Raises:
+           AttributeError: If accessing an item's text fails due to the item being `None`.
+        """
         table_data = []
         for row in range(table.rowCount()):
             cur_asset_data = self._create_asset_data()
