@@ -4,7 +4,7 @@
 
 ## Overview
 
-PyAE - After Effects Pipeline is a robust desktop application designed to optimize the workflow of Adobe After Effects users. Utilizing the powerful PyQt5 framework, this application introduces an intuitive approach to project and asset management. Its aim is to streamline the creative process for video editors and motion graphics artists, ensuring an organized, efficient workflow. (Thisis one of my first major projects in Python so this is heavily under development still)
+PyAE - After Effects Pipeline is a robust desktop application designed to optimize the workflow of Adobe After Effects users. Utilizing the powerful PyQt5 framework, this application introduces an intuitive approach to project and asset management. Its aim is to streamline the creative process for video editors and motion graphics artists, ensuring an organized, efficient workflow. (This is one of my first major projects in Python so this is heavily under development still)
 
 ## Features
 
@@ -36,15 +36,10 @@ Follow these steps to install PyAE - After Effects Pipeline:
 
 1. **Clone the repository**:
     ```bash
-    git clone https://yourrepository/AfterEffectsPipeline.git
+    git clone https://github.com/MartynTranter/Py_Ae.git
     ```
     
-2. **Navigate to the project directory**:
-    ```bash
-    cd AfterEffectsPipeline
-    ```
-    
-3. **Install the required dependencies**:
+2. **Install the required dependencies**:
     ```bash
     pip install PyQt5 psutil pygetwindow pywin32
     ```
@@ -53,7 +48,7 @@ Follow these steps to install PyAE - After Effects Pipeline:
 
 Launch PyAE - After Effects Pipeline using the command:
 ```bash
-python after_effects_pipeline.py
+python py_ae_v3.py
 ```
 
 ## Usage
