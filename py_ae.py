@@ -1,5 +1,16 @@
-# Standard library imports
-import json
+"""
+# Python After Effects (PyAe)
+
+* Description
+
+    A simple PyQt5 Gui for managing After Effects projects and project assets.
+
+* Update History
+
+    `2024-03-17` - Init
+"""
+
+import getpass
 import os
 import shutil
 import subprocess
@@ -8,23 +19,15 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-import getpass
+from typing import Optional
 
-# Third-party library imports
 import psutil
 import pygetwindow
-import win32gui
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSettings, QProcess, QSize
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QMessageBox, QFileDialog, QHBoxLayout, QInputDialog, QLineEdit, QLabel, QFormLayout, QDialog, QDialogButtonBox)
-
-
-
-def colorize_svg(svg_path, color=Qt.white):
-    pixmap = QPixmap(svg_path)
-    return QIcon(pixmap)
 
 
 class SettingsDialog(QDialog):
@@ -79,7 +82,8 @@ class SettingsDialog(QDialog):
         return self.aePathEdit.text(), self.assetsFolderEdit.text(), self.projectsFolderEdit.text()
 
     def browseForAePath(self):
-        filePath, _ = QFileDialog.getOpenFileName(self, "Select After Effects Executable", "", "Executable Files (*.exe)")
+        filePath, _ = QFileDialog.getOpenFileName(self, "Select After Effects Executable", "",
+                                                  "Executable Files (*.exe)")
         if filePath:
             self.aePathEdit.setText(filePath)
 
@@ -92,6 +96,21 @@ class SettingsDialog(QDialog):
         folderPath = QFileDialog.getExistingDirectory(self, "Select Projects Save Folder")
         if folderPath:
             self.projectsFolderEdit.setText(folderPath)
+
+    def accept(self):
+        settings = QSettings("YourOrganization", "AfterEffectsPipeline")
+        settings.setValue("assetsFolder", self.assetsFolderEdit.text())
+        settings.setValue("aePath", self.aePathEdit.text())
+        settings.setValue("projectsFolder", self.projectsFolderEdit.text())
+
+        super().accept()
+
+    def clear_projects_table(self):
+        """
+        Clears all rows from the projects table.
+        """
+        while self.projects_table.rowCount() > 0:
+            self.projects_table.removeRow(0)
 
 
 class AfterEffectsPipeline(QWidget):
@@ -107,6 +126,7 @@ class AfterEffectsPipeline(QWidget):
         last_project_files (list[Path]): A list of paths for the last accessed project files.
         imported_assets (list[Path]): A list of paths for the imported assets.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -124,23 +144,30 @@ class AfterEffectsPipeline(QWidget):
         # Initialize the last project directory and list variables
         self.last_project_directory = None
         self.last_project_files: list[Path] = []
-        self.imported_assets: list[dict] = []
-        qss_path = Path(Path(__file__).parent, 'Combinear.qss')
-        with open(qss_path, 'r') as f:
-            stylesheet = f.read()
-            self.setStyleSheet(stylesheet)
-            self.process = QProcess(self)  # Add this line to initialize QProcess
-            self.process.finished.connect(self.onProcessFinished)  # Optional: Connect to a method to handle process completion
+        self.cur_project_files: list[Path] = []
+        self.process = QProcess(self)
+        self.process.finished.connect(
+            self.on_process_finished)
 
+        self.set_qss()
         self.create_search_bar()
         self.create_asset_search_bar()
         self.create_widgets()
         self.create_layout()
         self.create_connections()
-        self.load_settings()
+        self._load_project_settings()
+        self._load_asset_settings()
+        self._load_window_settings()
 
-    def showSettingsDialog(self):
-        """Displays a settings dialog window to allow the user to configure various settings.
+    def set_qss(self):
+        qss_path = Path(Path(__file__).parent, 'Combinear.qss')
+        with open(qss_path, 'r') as f:
+            stylesheet = f.read()
+            self.setStyleSheet(stylesheet)
+
+    def show_settings_dialog(self):
+        """
+        Displays a settings dialog window to allow the user to configure various settings.
 
         Reads previously saved settings from QSettings and pre-populates the dialog fields with them.
         Upon closing the dialog, saves the updated settings if the user accepts the changes.
@@ -160,35 +187,20 @@ class AfterEffectsPipeline(QWidget):
             settings.setValue("assetsFolder", assetsFolder)
             settings.setValue("projectsFolder", projectsFolder)  # New line to save the project folder setting
 
+
     @staticmethod
-    def set_window_position(window_title, x, y, width, height):
-        """Set the position and size of a window by its title.
-
-            Args:
-                window_title (str): The title of the window to position.
-                x (int): The x-coordinate of the window's new position.
-                y (int): The y-coordinate of the window's new position.
-                width (int): The new width of the window.
-                height (int): The new height of the window.
-
-            Note:
-                This method works only on Windows systems using the win32gui library.
+    def activate_after_effects_window():
         """
-        hwnd = win32gui.FindWindow(None, window_title)
-        if hwnd:
-            win32gui.SetWindowPos(hwnd, win32gui.HWND_TOP, x, y, width, height, win32gui.SWP_SHOWWINDOW)
+        Activates and positions the After Effects window.
 
-    def activate_after_effects_window(self):
-        """Activates and positions the After Effects window.
+        This method attempts to find the After Effects window either by an exact title match or a partial match.
+        Once the window is found, it waits for a brief moment to ensure the application is ready before adjusting its position.
 
-            This method attempts to find the After Effects window either by an exact title match or a partial match.
-            Once the window is found, it waits for a brief moment to ensure the application is ready before adjusting its position.
+        Note:
+            This method depends on the pygetwindow library for window manipulation.
 
-            Note:
-                This method depends on the pygetwindow library for window manipulation.
-
-            Raises:
-                Exception: If there's an error while managing the After Effects window.
+        Raises:
+            Exception: If there's an error while managing the After Effects window.
         """
         # Adjust the title to match the exact title of the After Effects window, including the version year if necessary
         window_title_exact = "Adobe After Effects 2024"
@@ -206,7 +218,7 @@ class AfterEffectsPipeline(QWidget):
                 x, y, width, height = 100, 100, 1280, 720  # Example values
                 AfterEffectsPipeline.set_window_position(window_title_exact, x, y, width, height)
             except Exception as e:
-                print(f"Error managing After Effects window: {e}")
+                print(f"[1] Error managing After Effects window: {e}")
 
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
     Construction
@@ -231,29 +243,30 @@ class AfterEffectsPipeline(QWidget):
         """
         self.run_after_effects_button = QPushButton()
         self.run_after_effects_button.setText("Open After Effects")
-        self.run_after_effects_button.setIcon(colorize_svg("images/after-effects.png", Qt.white))  # Set the color here
-        self.run_after_effects_button.setIconSize(QSize(20, 20))  # Set icon size
+        self.run_after_effects_button.setIcon(QIcon("images/After_effects_icon.svg"))
+        self.run_after_effects_button.setIconSize(QSize(20, 20))
         self.run_after_effects_button.setFixedSize(80, 80)
 
         self.open_project_button = QPushButton()
         self.open_project_button.setText("Open Project")
-        self.open_project_button.setIcon(colorize_svg("images/book-open.svg", Qt.white))  # Set the color here
+        self.open_project_button.setIcon(QIcon("images/book-open.svg"))  # Set the color here
         self.open_project_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
         self.open_project_button.setFixedSize(80, 80)
 
         self.new_project_button = QPushButton()
         self.new_project_button.setText("New Project")
-        self.new_project_button.setIcon(colorize_svg("images/file-plus.svg", Qt.white))  # Set the color here
+        self.new_project_button.setIcon(QIcon("images/file-plus.svg"))  # Set the color here
         self.new_project_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
         self.new_project_button.setFixedSize(80, 80)
 
         self.import_file_button = QPushButton()
         self.import_file_button.setText("Import Asset")
-        self.import_file_button.setIcon(colorize_svg("images/plus-square.svg", Qt.white))  # Set the color here
+        self.import_file_button.setIcon(QIcon("images/file-plus.svg"))
         self.import_file_button.setIconSize(QSize(20, 20))  # Set icon size (optional)
         self.import_file_button.setFixedSize(80, 80)
 
-        self.settings_button = QPushButton("Settings")
+        self.settings_button = QPushButton()
+        self.settings_button.setText("Settings")
         self.settings_button.setIcon(QIcon('images/settings.svg'))  # Ensure you have an appropriate icon
         self.settings_button.setIconSize(QSize(20, 20))
         self.settings_button.setFixedSize(200, 40)
@@ -264,17 +277,19 @@ class AfterEffectsPipeline(QWidget):
         self.import_file_button.setFixedSize(200, 40)
 
         # Create a table widget to display last project files
-        self.last_projects_table = QTableWidget()
-        self.last_projects_table.setColumnCount(5)  # Increase column count for buttons
-        self.last_projects_table.setHorizontalHeaderLabels(['Project Name', 'File Path', 'Last Modified', 'Open Project', 'Delete Project'])
-        self.last_projects_table.horizontalHeader().setStretchLastSection(True)
-        self.last_projects_table.setSortingEnabled(True)
-        self.last_projects_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.projects_table = QTableWidget()
+        self.projects_table.setColumnCount(5)  # Increase column count for buttons
+        self.projects_table.setHorizontalHeaderLabels(
+            ['Project Name', 'File Path', 'Last Modified', 'Created By', 'Actions'])
+        self.projects_table.horizontalHeader().setStretchLastSection(True)
+        self.projects_table.setSortingEnabled(True)
+        self.projects_table.setSelectionBehavior(QTableWidget.SelectRows)
 
         # Create a table widget to display imported assets
         self.imported_assets_table = QTableWidget()
         self.imported_assets_table.setColumnCount(5)  # Adjusted from 4 to 5
-        self.imported_assets_table.setHorizontalHeaderLabels(['Asset Name', 'File Path', 'Last Modified', 'Imported By', 'Actions'])
+        self.imported_assets_table.setHorizontalHeaderLabels(
+            ['Asset Name', 'File Path', 'Last Modified', 'Imported By', 'Actions'])
         self.imported_assets_table.horizontalHeader().setStretchLastSection(True)
         self.imported_assets_table.setSortingEnabled(True)
         self.imported_assets_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -302,7 +317,7 @@ class AfterEffectsPipeline(QWidget):
         saved_projects_label.setAlignment(Qt.AlignLeft)  # Align the text to the left
         projects_layout.addWidget(saved_projects_label)
         projects_layout.addWidget(self.search_bar)
-        projects_layout.addWidget(self.last_projects_table)
+        projects_layout.addWidget(self.projects_table)
 
         # Add a label above the imported assets table
         imported_assets_label = QLabel("Imported Assets")
@@ -316,21 +331,113 @@ class AfterEffectsPipeline(QWidget):
         main_layout.addLayout(button_layout)
         main_layout.addLayout(projects_layout)
 
-    def filter_projects(self, text):
+    def create_connections(self):
+        """
+        Connects UI signals to their corresponding slots or methods.
+
+        Establishes connections between UI components and their handling methods, ensuring the application
+        responds appropriately to user actions.
+        """
+        self.run_after_effects_button.clicked.connect(self.run_after_effects_connection)
+        self.open_project_button.clicked.connect(self.open_after_effects_project_connection)
+        self.import_file_button.clicked.connect(self.import_file_connection)
+        self.new_project_button.clicked.connect(self.create_new_project_connection)
+        self.settings_button.clicked.connect(self.show_settings_dialog)
+
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Save Settings
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+    def closeEvent(self, event):
+        self._save_project_settings()
+        self._save_asset_settings()
+        self._save_window_settings()
+        super(AfterEffectsPipeline, self).closeEvent(event)
+
+    def _save_window_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}Settings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+        save_settings_obj.setValue('window_geo', self.saveGeometry())
+
+    def _load_window_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}Settings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+        value = save_settings_obj.value('window_geo')
+        if value:
+            self.restoreGeometry(value)
+
+    def _save_project_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}ProjectSettings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+
+        save_data = []
+        table_data = self._collect_table_data(self.projects_table)
+        for data in table_data:
+            cur_data = []
+            for _, v in data.items():
+                cur_data.append(v)
+            save_data.append(cur_data)
+
+        save_settings_obj.setValue("project_table", save_data)
+
+    def _load_project_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}ProjectSettings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+        save_data = save_settings_obj.value('project_table')
+        if not save_data:
+            return
+        for i in save_data:
+            if not Path(i[1]).exists():
+                continue
+            table_data = self._create_blank_project_data()
+            table_data['Project Name'] = i[0]
+            table_data['File Path'] = i[1]
+            table_data['Last Modified'] = i[2]
+            table_data['Created By'] = i[3]
+            self.add_project_row(table_data)
+
+    def _save_asset_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}AssetsSettings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+
+        save_data = []
+        table_data = self._collect_asset_table_data(self.imported_assets_table)
+        for data in table_data:
+            cur_data = []
+            for _, v in data.items():
+                cur_data.append(v)
+            save_data.append(cur_data)
+
+        save_settings_obj.setValue("imported_assets_table", save_data)
+
+    def _load_asset_settings(self):
+        save_path = Path(os.getenv("USERPROFILE"), f'{self.windowTitle()}AssetsSettings.ini')
+        save_settings_obj = QSettings(save_path.as_posix(), QSettings.IniFormat)
+        save_data = save_settings_obj.value('imported_assets_table')
+        if not save_data:
+            return
+        for i in save_data:
+            if not Path(i[1]).exists():
+                continue
+            table_data = self._create_asset_data()
+            table_data['Asset Name'] = i[0]
+            table_data['File Path'] = i[1]
+            table_data['Last Modified'] = i[2]
+            table_data['Imported By'] = i[3]
+            self.add_asset_row(table_data)
+
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Front end functions
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+    def filter_projects(self, sub_string: str):
         """
         Filters displayed projects based on search input.
 
         Args:
-        text (str): Search query entered by the user.
+            sub_string (str): Search query entered by the user.
         """
-        if not text:
-            self.last_project_files = self.load_all_projects()  # Reset to all projects
-            self.populate_last_projects_table()
-            return
-
-        filtered_projects = [project for project in self.last_project_files if text.lower() in project.name.lower()]
-        self.last_project_files = filtered_projects
-        self.populate_last_projects_table()
+        print(f'need to rewrite - substring: {sub_string}')
 
     def filter_assets(self):
         """
@@ -354,42 +461,11 @@ class AfterEffectsPipeline(QWidget):
                 else:
                     self.imported_assets_table.setRowHidden(row, True)
 
-    def load_all_projects(self):
-        """
-        Loads all previously opened projects from application settings.
-
-        Retrieves and returns a list of Path objects representing previously opened and saved projects.
-
-        Returns:
-        List[Path]: A list of Path objects for each previously opened project.
-        """
-        settings = QSettings("YourOrganization", "AfterEffectsPipeline")
-        loaded_last_proj_dir = settings.value("last_project_directory", None)
-        if not loaded_last_proj_dir:
-            return []
-        last_project_files = []
-        for i in settings.value("last_project_files", []):
-            last_project_files.append(Path(i))
-        return last_project_files
-
-    def create_connections(self):
-        """
-        Connects UI signals to their corresponding slots or methods.
-
-        Establishes connections between UI components and their handling methods, ensuring the application
-        responds appropriately to user actions.
-        """
-        self.run_after_effects_button.clicked.connect(self.run_after_effects_connection)
-        self.open_project_button.clicked.connect(self.open_after_effects_project_connection)
-        self.import_file_button.clicked.connect(self.import_file_connection)
-        self.new_project_button.clicked.connect(self.create_new_project_connection)
-        self.settings_button.clicked.connect(self.showSettingsDialog)
-
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
     Input Connections
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-    def open_project_connection(self, project_path: str = None):
+    def open_project_connection(self, project_path: Path):
         """
         Opens an After Effects project.
 
@@ -398,24 +474,24 @@ class AfterEffectsPipeline(QWidget):
 
         Args:
             project_path (str, optional): The file path to the After Effects project to be opened. If None, the project
-                                          selected in the last projects table will be opened. Defaults to None.
+            selected in the last projects table will be opened. Defaults to None.
         """
         if project_path:
-            aerender_path = r"C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\AfterFX.exe"
-            command = [aerender_path, project_path]
+            aerender_path = Path("C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe")
+            command = [aerender_path.as_posix(), project_path]
 
             # Execute the After Effects command asynchronously
             self.run_after_effects_command_async(command)
         else:
-            selected_row = self.last_projects_table.currentRow()
+            selected_row = self.projects_table.currentRow()
             if selected_row == -1:
                 self.show_error_message("No project selected", "Please select a project to open.")
                 return
-            project_path_item = self.last_projects_table.item(selected_row, 1)
+            project_path_item = self.projects_table.item(selected_row, 1)
             if project_path_item:
                 project_path = project_path_item.text()
-                aerender_path = r"C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\AfterFX.exe"
-                command = [aerender_path, project_path]
+                aerender_path = Path("C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe")
+                command = [aerender_path.as_posix(), project_path]
 
                 # Call the asynchronous method to run After Effects command
                 self.run_after_effects_command_async(command)
@@ -428,51 +504,48 @@ class AfterEffectsPipeline(QWidget):
         Deletes a project file from the filesystem and updates the UI.
 
         Args:
-            index (int): The index of the project file in the last project files list to be deleted.
+            index (int): The index of row and the related project.
         """
-        if 0 <= index < len(self.last_project_files):
-            project_info = self.last_project_files[index]
-            project_path_str = project_info["path"]
-            project_path = Path(project_path_str)
+        # Confirm deletion with the user
+        confirmation = QMessageBox.question(
+            self, "Confirmation", "Are you sure you want to delete this project?",
+            QMessageBox.Yes | QMessageBox.Cancel)
 
-            confirmation = QMessageBox.question(self, "Confirmation", "Are you sure you want to delete this project?",
-                                                QMessageBox.Yes | QMessageBox.No)
-            if confirmation == QMessageBox.Yes:
-                try:
-                    # Check if the project file exists and delete it
-                    if project_path.exists():
-                        os.remove(project_path)
-                        # Now remove this project from the list of projects
-                        del self.last_project_files[index]
-                        # Update the table to reflect the deletion
-                        self.populate_last_projects_table()
-                        # Save the updated list of projects to persistent storage, if applicable
-                        self.save_settings()
-                    else:
-                        QMessageBox.information(self, "File Not Found", "The project file does not exist.")
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Error deleting project file: {e}")
-        else:
-            QMessageBox.warning(self, "Invalid Selection", "The selected project is invalid.")
+        if confirmation != QMessageBox.Yes:
+            return
+
+        # # Attempt to delete the project file
+        project_path = Path(self.projects_table.item(index, 1).text())
+        if not project_path.exists():
+            QMessageBox.information(self, "File Not Found!")
+            return
+
+        os.remove(project_path)
+        self.remove_row(index)
 
     def create_new_project_connection(self):
         # Use the user-defined projects folder
-        projectsFolder = QSettings("YourOrganization", "AfterEffectsPipeline").value("projectsFolder", "default/path/to/projects")
-        if not os.path.exists(projectsFolder):
+        projectsFolder = Path(QSettings("YourOrganization", "AfterEffectsPipeline").value("projectsFolder",
+                                                                                          "default/path/to/projects"))
+        if not projectsFolder.exists():
             os.makedirs(projectsFolder, exist_ok=True)
 
         try:
             project_name, ok_pressed = QInputDialog.getText(self, "New Project", "Enter the project name:")
             if ok_pressed and project_name:
                 new_project_path = Path(projectsFolder, f"{project_name}.aep")
-                template_project_path = "C:/Users/marty/ae_test_2/Blank_Project.aep"
-                shutil.copyfile(template_project_path, new_project_path)
+                template_project_path = Path(Path(__file__).parent, 'Blank_Project.aep')
+                shutil.copyfile(template_project_path, new_project_path.as_posix())
 
                 # Fetch the current operating system's username
                 created_by = getpass.getuser()  # Use the OS username as the project creator's name
 
-                self.update_last_projects_list(new_project_path, created_by)
-                self.save_settings()
+                data = self._create_blank_project_data()
+                data['Project Name'] = project_name
+                data['File Path'] = new_project_path.as_posix()
+                data['Last Modified'] = datetime.fromtimestamp(new_project_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                data['Created By'] = getpass.getuser()
+                self.add_project_row(data)
         except Exception as e:
             print(f"An error occurred: {e}")
 
@@ -490,14 +563,14 @@ class AfterEffectsPipeline(QWidget):
             self.show_error_message("After Effects path not provided", "Executable not found.")
             return
         # Run After Effects with the specified command
-        aerender_path = r"C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\AfterFX.exe"
+        aerender_path = r"C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe"
         if aerender_path:
             command = [aerender_path]
             try:
                 # Use subprocess.Popen with start method
                 subprocess.Popen(command, start_new_session=True)
             except Exception as e:
-                print(f"Error launching After Effects: {e}")
+                print(f"[2] Error launching After Effects: {e}")
         else:
             self.show_error_message("After Effects path not provided", "Please enter the path to After Effects.")
 
@@ -509,7 +582,7 @@ class AfterEffectsPipeline(QWidget):
         and list based on the selection, saves the updated information to settings, and launches After Effects with the
         selected project.
         """
-        aerender_path = r"C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\AfterFX.exe"
+        aerender_path = Path("C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/AfterFX.exe")
         if not Path(aerender_path).exists():
             self.show_error_message("After Effects path not provided", "Executable not found.")
             return
@@ -520,9 +593,6 @@ class AfterEffectsPipeline(QWidget):
         if project_path:
             print(f"Project selected: {project_path}")  # Diagnostic print
             self.last_project_directory = Path(project_path).parent
-            self.update_last_projects_list(Path(project_path))
-            self.save_settings()
-
             # Use QProcess to start After Effects with the selected project
             self.process = QProcess(self)
             self.process.setProgram(aerender_path)
@@ -531,15 +601,17 @@ class AfterEffectsPipeline(QWidget):
             # Optional: Connect signals for process start, finish, and error handling
             self.process.started.connect(lambda: print("After Effects started."))
             self.process.finished.connect(lambda exitCode: print(f"After Effects finished with exit code {exitCode}."))
-            self.process.errorOccurred.connect(lambda error: print(f"Error occurred: {self.process.errorString()}"))
+            self.process.errorOccurred.connect(lambda error: print(f"[3] Error occurred: {self.process.errorString()}"))
 
             self.process.start()  # Start the process
             print("Command to open After Effects has been issued.")
 
-    def onProcessFinished(self):
+    @staticmethod
+    def on_process_finished():
         print("After Effects command executed successfully.")
 
-    def is_after_effects_running(self):
+    @staticmethod
+    def is_after_effects_running():
         """
         Checks if Adobe After Effects is running.
 
@@ -554,56 +626,55 @@ class AfterEffectsPipeline(QWidget):
         return False
 
     def import_file_connection(self):
-        """
-        Imports a selected file into the current After Effects project, updating the UI and settings accordingly.
-        """
+        """Imports a selected file into the current After Effects project, updating the UI and settings accordingly."""
         if not self.is_after_effects_running():
             self.show_error_message("After Effects Not Running", "Adobe After Effects must be open to import assets.")
             return
 
-        aePath = self.get_after_effects_path()
-        if not aePath:
+        if not self.after_effects_path.exists():
             return
 
-        assetsFolder = self.get_assets_folder_path()
-        if not assetsFolder:
+        if not self.after_effects_path.exists():
             return
 
-        file_name = self.prompt_user_for_file(assetsFolder)
-        if not file_name:
+        file_path = Path(self.prompt_user_for_file(self.after_effects_path))
+        if not file_path.exists():
             return
 
         # Copy the file to the assets folder and prepare for import
-        destination = shutil.copy(file_name, assetsFolder)
-        imported_by = getpass.getuser()
+        destination = Path(self.assets_folder_path, file_path.name)
+        shutil.copy(file_path.as_posix(), destination.as_posix())
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Generate and execute JSX script for importing
-        self.execute_jsx_script(aePath, destination)
-
+        self.execute_jsx_script(self.after_effects_path.as_posix(), destination.as_posix())
         # Update UI and settings
-        self.update_imported_assets(file_name, current_time, imported_by)
+        self.update_imported_assets(file_path, current_time, getpass.getuser())
 
-    def get_after_effects_path(self):
-        aePath = QSettings("YourOrganization", "AfterEffectsPipeline").value("aePath", "")
-        if not aePath or not os.path.isfile(aePath):
-            self.show_error_message("Error", "After Effects executable path is not set correctly in settings.")
-            return None
-        return aePath
+    @property
+    def after_effects_path(self) -> Optional[Path]:
+        ae_path = Path(QSettings("YourOrganization", "AfterEffectsPipeline").value("aePath", ""))
+        if ae_path.exists() and ae_path.is_file():
+            return ae_path
 
-    def get_assets_folder_path(self):
-        assetsFolder = QSettings("YourOrganization", "AfterEffectsPipeline").value("assetsFolder", "")
-        if not assetsFolder or not os.path.exists(assetsFolder):
-            self.show_error_message("Assets folder not set", "Please set the assets folder path in settings.")
-            return None
-        return assetsFolder
+        return Path('does/not/exist/dasds')
 
-    def prompt_user_for_file(self, assetsFolder):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Import File into After Effects", assetsFolder, "All Files (*)")
+    @property
+    def assets_folder_path(self) -> Optional[Path]:
+        asset_folder_path = Path(QSettings("YourOrganization", "AfterEffectsPipeline").value("assetsFolder", ""))
+        if asset_folder_path and asset_folder_path.exists():
+            return asset_folder_path
+
+        return Path('does/not/exist/dasds')
+
+    def prompt_user_for_file(self, asset_folder: Path) -> Optional[Path]:
+        file_name, _ = QFileDialog.getOpenFileName(self, "Import File into After Effects", asset_folder.as_posix(),
+                                                   "All Files (*)")
         return file_name if file_name else None
 
-    def execute_jsx_script(self, aePath, file_path):
-        corrected_path = file_path.replace('\\', '\\\\')
+    def execute_jsx_script(self, ae_path, file_path):
+        corrected_path = file_path.replace('//', '////')
         script_content = f"""
             var fileToImport = new File("{corrected_path}");
             if (fileToImport.exists) {{
@@ -615,27 +686,24 @@ class AfterEffectsPipeline(QWidget):
         script_file_path = tempfile.mktemp(suffix=".jsx")
         with open(script_file_path, 'w') as script_file:
             script_file.write(script_content)
-        self.run_after_effects_command_async([aePath, '-r', script_file_path])
+        self.run_after_effects_command_async([ae_path, '-r', script_file_path])
 
-    def update_imported_assets(self, file_path, last_modified, imported_by):
-        asset_name = os.path.basename(file_path)
-        self.imported_assets.append({"path": file_path, "last_modified": last_modified, "imported_by": imported_by})
-        self.populate_imported_assets_table(asset_name, file_path, last_modified, imported_by)
-        self.save_imported_assets_settings()
+    def update_imported_assets(self, file_path: Path, last_modified: str, imported_by: str):
+        self.populate_imported_assets_table(file_path, last_modified, imported_by)
 
-    def populate_imported_assets_table(self, asset_name, file_path, last_modified, imported_by):
+    def populate_imported_assets_table(self, file_path: Path, last_modified: str, imported_by: str):
         """
         Populates the imported assets table with the new asset.
 
         Args:
-            asset_name (str): The name of the imported asset.
-            file_path (str): The file path of the imported asset.
+            file_path (Path): The file path of the imported asset.
             last_modified (str): Last modified timestamp of the asset.
+            imported_by(str): The user who imported it.
         """
         row_count = self.imported_assets_table.rowCount()
         self.imported_assets_table.insertRow(row_count)
-        self.imported_assets_table.setItem(row_count, 0, QTableWidgetItem(asset_name))
-        self.imported_assets_table.setItem(row_count, 1, QTableWidgetItem(file_path))
+        self.imported_assets_table.setItem(row_count, 0, QTableWidgetItem(file_path.name))
+        self.imported_assets_table.setItem(row_count, 1, QTableWidgetItem(file_path.as_posix()))
         self.imported_assets_table.setItem(row_count, 2, QTableWidgetItem(last_modified))
         self.imported_assets_table.setItem(row_count, 3, QTableWidgetItem(imported_by))
 
@@ -658,122 +726,76 @@ class AfterEffectsPipeline(QWidget):
         self.imported_assets_table.setCellWidget(row_count, 4, actions_widget)
         self.imported_assets_table.setRowCount(row_count + 1)
 
-    def save_imported_assets_settings(self):
-        """
-        Save the list of imported assets to settings.
-
-        This method saves the list of imported assets to the application settings.
-        It uses QSettings to store the data persistently.
-        """
-        settings = QSettings("YourOrganization", "AfterEffectsPipeline")
-        # Serialize imported_assets list into a JSON string
-        serialized_assets = json.dumps(self.imported_assets)
-        settings.setValue("imported_assets", serialized_assets)
-
-    def import_to_current_project(self, file_path):
+    def import_to_current_project(self, file_path: Path):
         """
         Imports the selected file into the current After Effects project.
 
         Args:
-            file_path (str): The file path of the asset to import into After Effects.
+            file_path (path): The file path of the asset to import into After Effects.
         """
 
         if not self.is_after_effects_running():
             self.show_error_message("After Effects Not Running", "Adobe After Effects must be open to perform this action.")
             return
 
-        aerender_path = r"C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\AfterFX.exe"
-        if not aerender_path:
-            self.show_error_message("After Effects path not provided", "Please enter the path to After Effects.")
+        ae_path = self.after_effects_path
+        if ae_path is None or not ae_path.exists():
+            self.show_error_message("Invalid Path", "The path to After Effects is invalid.")
             return
 
-        script_content = f"""
-        var proj = app.project;
-        if (proj) {{
-            var fileToImport = new ImportOptions();
-            fileToImport.file = new File("{file_path}");
-            proj.importFile(fileToImport);
-        }}
-        """
-        # Create a temporary JSX script file
-        script_file_path = tempfile.mktemp(suffix=".jsx")
-        with open(script_file_path, 'w') as script_file:
-            script_file.write(script_content)
+        # Construct the JSX script for importing the asset
+        jsx_script = f"""
+            var myFile = new File("{file_path.as_posix()}");
+            app.project.importFile(new ImportOptions(myFile));
+            """
 
-        # Execute the After Effects command synchronously
-        command = [aerender_path, '-r', script_file_path]
-        try:
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error during After Effects execution: {e}")
-        os.remove(script_file_path)
+        # Save the JSX script to a temporary file
+        temp_jsx_path = Path(tempfile.gettempdir(), "tempImportScript.jsx")
+        with open(temp_jsx_path, "w") as jsx_file:
+            jsx_file.write(jsx_script)
 
-    def delete_imported_asset(self, row):
-        confirmation = QMessageBox.question(self, "Confirmation", "Are you sure you want to delete this asset?",
-                                            QMessageBox.Yes | QMessageBox.No)
+        # Run the script in After Effects
+        command = [ae_path.as_posix(), "-r", temp_jsx_path.as_posix()]
+        subprocess.run(command)
+
+        # Optionally, delete the temp script after execution
+        temp_jsx_path.unlink(missing_ok=True)
+
+    def delete_imported_asset(self, row: int):
+        confirmation = QMessageBox.question(self, "Confirmation", "Are you sure?", QMessageBox.Yes | QMessageBox.No)
         if confirmation == QMessageBox.Yes:
-            asset_name = self.imported_assets_table.item(row, 0).text()
-            assetsFolder = QSettings("YourOrganization", "AfterEffectsPipeline").value("assetsFolder", "")
-            asset_path = os.path.join(assetsFolder, asset_name)
-            self.imported_assets_table.removeRow(row)
-            self.imported_assets.pop(row)
+            asset_path = Path(self.imported_assets_table.itemAt(row, 1).text())
+            if not asset_path.exists():
+                self.imported_assets_table.removeRow(row)
+                return
 
-            if os.path.exists(asset_path):
-                try:
-                    os.remove(asset_path)
-                    print(f"Deleted asset at: {asset_path}")
-                except OSError as e:
-                    QMessageBox.critical(self, "Error", f"Failed to delete asset file: {e}")
-                    print(f"Failed to delete asset at: {asset_path}. Error: {e}")
-            else:
-                QMessageBox.information(self, "Error", "Asset file not found in the assets folder.")
-
-            self.save_imported_assets_settings()
+            os.remove(asset_path)
 
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
     Back-end Functions
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-    def delete_project(self, index: int):
-        """
-        Deletes a project file from the filesystem and updates the UI.
+    @staticmethod
+    def _create_blank_project_data() -> dict:
+        """['Project Name', 'File Path', 'Last Modified', 'Created By', 'Actions']"""
+        data = {
+            'Project Name': '',
+            'File Path': '',
+            'Last Modified': '',
+            'Created By': ''
+        }
+        return data
 
-        Args:
-            index (int): The index of the project file in the last project files list to be deleted.
-        """
-        # Validate index range
-        if not (0 <= index < len(self.last_project_files)):
-            QMessageBox.warning(self, "Invalid Selection", "The selected project is invalid.")
-            return
-
-        project_info = self.last_project_files[index]
-        project_path = Path(project_info["path"])
-
-        # Confirm deletion with the user
-        confirmation = QMessageBox.question(
-            self, "Confirmation", "Are you sure you want to delete this project?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
-
-        if confirmation != QMessageBox.Yes:
-            return
-
-        # Attempt to delete the project file
-        try:
-            if not project_path.exists():
-                raise FileNotFoundError("The project file does not exist.")
-
-            os.remove(project_path)
-            # Reflect changes in the UI and settings
-            del self.last_project_files[index]
-            self.populate_last_projects_table()
-            self.save_settings()
-            QMessageBox.information(self, "Success", "The project has been successfully deleted.")
-
-        except FileNotFoundError as e:
-            QMessageBox.information(self, "File Not Found", str(e))
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error deleting project file: {e}")
+    @staticmethod
+    def _create_asset_data() -> dict:
+        """['Asset Name', 'File Path', 'Last Modified', 'Imported By', 'Actions']"""
+        data = {
+            'Asset Name': '',
+            'File Path': '',
+            'Last Modified': '',
+            'Imported By': ''
+        }
+        return data
 
     def remove_row(self, index: int):
         """
@@ -785,10 +807,25 @@ class AfterEffectsPipeline(QWidget):
         Args:
             index (int): The index of the row to be removed.
         """
-        if 0 <= index < len(self.last_project_files):
-            del self.last_project_files[index]
-            self.populate_last_projects_table()
-            self.save_settings()
+        count = self.projects_table.rowCount()
+        if count > index:
+            self.projects_table.removeRow(index)
+
+    def add_project_row(self, row_data: dict):
+        new_row_index = self.projects_table.rowCount()
+        self.projects_table.insertRow(new_row_index)
+        for i, v in enumerate(row_data.values()):
+            self.projects_table.setItem(new_row_index, i, QTableWidgetItem(v))
+        action_widget = self._create_project_widget(new_row_index, row_data['File Path'])
+        self.projects_table.setCellWidget(new_row_index, 4, action_widget)  # Hard coded column value
+
+    def add_asset_row(self, row_data: dict):
+        new_row_index = self.imported_assets_table.rowCount()
+        self.imported_assets_table.insertRow(new_row_index)
+        for i, v in enumerate(row_data.values()):
+            self.imported_assets_table.setItem(new_row_index, i, QTableWidgetItem(v))
+        action_widget = self._create_asset_widget(new_row_index)
+        self.imported_assets_table.setCellWidget(new_row_index, 4, action_widget)  # Hard coded column value
 
     def run_after_effects_command_async(self, command: list[str]):
         """
@@ -797,70 +834,94 @@ class AfterEffectsPipeline(QWidget):
         Args:
             command (list[str]): The After Effects command to execute asynchronously.
         """
-        self.thread = AfterEffectsThread(command)
+        self.thread = AfterEffectsThread(command, self)
         self.thread.finished.connect(self.thread_finished)
         self.thread.start()
 
-    def update_last_projects_list(self, project_path: Path, created_by: str):
+    def _collect_table_data(self, table: QTableWidget) -> list[dict]:
+        table_data = []
+        for row in range(table.rowCount()):
+            cur_proj_data = self._create_blank_project_data()
+            for col in range(table.columnCount()):
+                key = table.horizontalHeaderItem(col).text()
+                try:
+                    cur_proj_data[key] = table.item(row, col).text()
+                except AttributeError:
+                    pass
+            table_data.append(cur_proj_data)
+
+        return table_data
+
+    def _collect_asset_table_data(self, table: QTableWidget) -> list[dict]:
+        table_data = []
+        for row in range(table.rowCount()):
+            cur_asset_data = self._create_asset_data()
+            for col in range(table.columnCount()):
+                key = table.horizontalHeaderItem(col).text()
+                try:
+                    cur_asset_data[key] = table.item(row, col).text()
+                except AttributeError:
+                    pass
+            table_data.append(cur_asset_data)
+        return table_data
+
+    def _create_project_widget(self, row_index: int, project_path: Path) -> QWidget:
         """
-        Adds a project to the list of last opened projects.
+        Container widget for project table
 
         Args:
-            created_by:
-            project_path (Path): The file path of the project to add to the list.
+            row_index(int): The row index from the table widget for button connections.
+            project_path(Path): Which project path to open.
+
+        Returns:
+            QtWidgets.QWidget: The widget containing the open and delete project buttons.
         """
-        project_info = {"path": project_path, "created_by": created_by}
-        self.last_project_files.append(project_info)
-        self.populate_last_projects_table()
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        open_button = QPushButton('Open')
+        delete_button = QPushButton('Delete')
 
-    def populate_last_projects_table(self):
+        open_button.clicked.connect(lambda: self.open_project_connection(project_path))
+        delete_button.clicked.connect(lambda: self.delete_project(row_index))
+
+        actions_layout.addWidget(open_button)
+        actions_layout.addWidget(delete_button)
+
+        return actions_widget
+
+    def _create_asset_widget(self, row_index: int) -> QWidget:
         """
-        Populate the table with the last opened projects, combining "Open Project" and "Delete Project"
-        buttons under a single "Actions" category.
+        Container widget for asset table.
+
+        Args:
+            row_index(int): The row index from the table widget for button connections.
+
+        Returns:
+            QtWidgets.QWidget: The widget containing the open and delete project buttons.
         """
-        self.last_projects_table.setRowCount(0)  # Reset the table contents
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        open_button = QPushButton('Import to Last Opened')
+        delete_button = QPushButton('Delete')
 
-        # Filter out projects that no longer exist on the filesystem
-        existing_projects = [project for project in self.last_project_files if Path(project["path"]).exists()]
+        file_path = Path(self.imported_assets_table.itemAt(row_index, 1).text())
 
-        # Update the last project files list to only include existing projects
-        self.last_project_files = existing_projects
+        open_button.clicked.connect(lambda: self.import_to_current_project(file_path))
+        delete_button.clicked.connect(lambda: self.delete_imported_asset(row_index))
 
-        for index, project_info in enumerate(self.last_project_files):
-            project_path = Path(project_info["path"])
-            project_name = project_path.name
-            file_path = str(project_path)
-            last_modified = datetime.fromtimestamp(project_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-            created_by = project_info["created_by"]  # Assuming each project_info dict has a "created_by" key
+        actions_layout.addWidget(open_button)
+        actions_layout.addWidget(delete_button)
 
-            self.last_projects_table.insertRow(index)
-            self.last_projects_table.setItem(index, 0, QTableWidgetItem(project_name))
-            self.last_projects_table.setItem(index, 1, QTableWidgetItem(file_path))
-            self.last_projects_table.setItem(index, 2, QTableWidgetItem(last_modified))
-            self.last_projects_table.setItem(index, 3, QTableWidgetItem(created_by))
-
-            # Container widget for action buttons
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            open_button = QPushButton('Open')
-            delete_button = QPushButton('Delete')
-
-            # Connect the buttons to their respective slot functions
-            open_button.clicked.connect(lambda _, idx=index: self.open_project_connection(self.last_project_files[idx]["path"].as_posix()))
-            delete_button.clicked.connect(lambda _, idx=index: self.delete_project(idx))
-
-            actions_layout.addWidget(open_button)
-            actions_layout.addWidget(delete_button)
-
-            self.last_projects_table.setCellWidget(index, 4, actions_widget)
-
-        # Optionally, save the updated list of projects to persist the changes
-        self.save_settings()
+        return actions_widget
 
     @staticmethod
-    def thread_finished():
-        print("After Effects command executed successfully.")
+    def thread_finished(success: bool):
+        if success:
+            print("After Effects command executed successfully.")
+        else:
+            print("After Effects command failed.")
 
     @staticmethod
     def show_error_message(title, message):
@@ -874,68 +935,22 @@ class AfterEffectsPipeline(QWidget):
     Saved Settings Handling 
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-    def load_settings(self):
-        """
-        Load application settings, including paths and the list of last projects and imported assets,
-        with enhanced JSON parsing safety.
-        """
-        settings = QSettings("YourOrganization", "AfterEffectsPipeline")
-        self.last_project_directory = Path(settings.value("last_project_directory", "")) \
-            if settings.value("last_project_directory", None) else None
-
-        # Simplify loading and parsing of the last project files
-        try:
-            self.last_project_files = [
-                {"path": Path(project["path"]), "created_by": project.get("created_by", "Unknown")}
-                for project in json.loads(settings.value("last_project_files", "[]"))
-                if isinstance(project, dict)]
-        except json.JSONDecodeError:
-            self.last_project_files = []
-
-        # Simplify loading and parsing of the imported assets
-        try:
-            self.imported_assets = json.loads(settings.value("imported_assets", "[]"))
-        except json.JSONDecodeError:
-            self.imported_assets = []
-
-        # Clear the tables before repopulating
-        self.last_projects_table.setRowCount(0)
-        self.imported_assets_table.setRowCount(0)
-        self.populate_last_projects_table()
-        for asset in self.imported_assets:
-            self.populate_imported_assets_table(
-                asset_name=os.path.basename(asset["path"]),
-                file_path=asset["path"],
-                last_modified=asset["last_modified"],
-                imported_by=asset.get("imported_by", "Unknown")
-            )
-
-    def save_settings(self):
-        """
-        Saves the application settings, including paths and the list of imported assets.
-        """
-        settings = QSettings("YourOrganization", "AfterEffectsPipeline")
-        # Serialize each project in last_project_files as a dictionary including the path and created_by info
-        serialized_projects = json.dumps([{"path": str(project["path"]), "created_by": project["created_by"]} for project in self.last_project_files])
-        settings.setValue("last_project_files", serialized_projects)
-        # Save the list of imported assets as a JSON string
-        settings.setValue("imported_assets", json.dumps(self.imported_assets))
-
 
 class AfterEffectsThread(QThread):
-    finished = pyqtSignal()
+    finished = pyqtSignal(bool)
 
-    def __init__(self, command: list[str]):
+    def __init__(self, command: list[str], parent: QWidget):
         super().__init__()
-        self.command = command
+        self.command = ' '.join(command)
+        self.parent = parent
 
     def run(self):
         try:
             subprocess.run(self.command, check=True)
+            self.finished.emit(True)
         except subprocess.CalledProcessError as e:
-            print(f"Error during After Effects execution: {e}")
-        finally:
-            self.finished.emit()
+            print(f"[5] Error during After Effects execution: {e}")
+            self.finished.emit(False)
 
 
 if __name__ == '__main__':
@@ -943,4 +958,4 @@ if __name__ == '__main__':
     window = AfterEffectsPipeline()
     window.show()
 
-    sys.exit(app.exec_())
+    app.exec_()
