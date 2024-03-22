@@ -28,7 +28,6 @@ To get started with PyAE - After Effects Pipeline, ensure you have the following
 - Python 3.6 or later for the core application.
 - PyQt5 for the graphical user interface.
 - psutil for managing system processes.
-- pygetwindow and pywin32 for enhanced window management on Windows platforms.
 
 ### Installation
 
@@ -48,7 +47,7 @@ Follow these steps to install PyAE - After Effects Pipeline:
 
 Launch PyAE - After Effects Pipeline using the command:
 ```bash
-python py_ae_v3.py
+python py_ae.py
 ```
 
 ## Usage
@@ -75,7 +74,7 @@ With After Effects running, you can import assets directly into your active proj
 
 1. Click "Import Asset".
 2. Navigate to the asset you wish to import.
-3. Select the asset and confirm to import it into the currently open After Effects project.
+3. Select the asset and confirm to import it into the last opened After Effects project.(This will be refactored in v2 to allow the user to import to the current project they are in.)
 
 ## Customization
 
